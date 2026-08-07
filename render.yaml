@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: telegram-anitoon-s1-bot
+    runtime: python
+    plan: free
+    region: singapore
+    branch: main
+
+    buildCommand: pip install -r requirements.txt
+
+    startCommand: python bot.py
+
+    healthCheckPath: /health
+
+    autoDeploy: true
