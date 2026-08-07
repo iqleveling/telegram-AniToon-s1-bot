@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 from pathlib import Path
 
@@ -8,7 +9,19 @@ from pyrogram.types import Message
 
 
 # ============================================================
-# CONFIG — values come from Render Environment Variables
+# LOGGING
+# ============================================================
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+)
+
+log = logging.getLogger("AniToonRenameBot")
+
+
+# ============================================================
+# ENVIRONMENT VARIABLES
 # ============================================================
 
 API_ID = int(os.environ["API_ID"])
@@ -17,16 +30,23 @@ BOT_TOKEN = os.environ["BOT_TOKEN"]
 
 PORT = int(os.environ.get("PORT", "10000"))
 
+
+# ============================================================
+# FILE STORAGE
+# ============================================================
+
 DOWNLOAD_DIR = Path("downloads")
 DOWNLOAD_DIR.mkdir(exist_ok=True)
 
+user_files = {}
+
 
 # ============================================================
-# TELEGRAM CLIENT
+# TELEGRAM BOT
 # ============================================================
 
-app = Client(
-    "telegram_anitoon_s1_bot",
+bot = Client(
+    "anitoon_rename_bot",
     api_id=API_ID,
     api_hash=API_HASH,
     bot_token=BOT_TOKEN,
@@ -34,29 +54,27 @@ app = Client(
 
 
 # ============================================================
-# TEMPORARY USER FILE STORAGE
-# ============================================================
-
-user_files = {}
-
-
-# ============================================================
-# RENDER HEALTH SERVER
+# HEALTH SERVER
 # ============================================================
 
 async def health(request):
-    return web.Response(
-        text="Telegram AniToon Rename Bot is running!"
+    return web.json_response(
+        {
+            "status": "ok",
+            "bot": "AniToon Rename Bot",
+        }
     )
 
 
 async def start_web_server():
-    web_app = web.Application()
 
-    web_app.router.add_get("/", health)
-    web_app.router.add_get("/health", health)
+    server = web.Application()
 
-    runner = web.AppRunner(web_app)
+    server.router.add_get("/", health)
+    server.router.add_get("/health", health)
+
+    runner = web.AppRunner(server)
+
     await runner.setup()
 
     site = web.TCPSite(
@@ -67,73 +85,88 @@ async def start_web_server():
 
     await site.start()
 
-    print(f"🌐 Web server running on port {PORT}")
+    log.info("WEB SERVER: running on port %s", PORT)
 
 
 # ============================================================
-# START COMMAND
+# /START
 # ============================================================
 
-@app.on_message(filters.private & filters.command("start"))
-async def start_command(client: Client, message: Message):
+@bot.on_message(
+    filters.private & filters.command("start")
+)
+async def start_handler(client, message):
 
     await message.reply_text(
         "👋 **Welcome to AniToon's Rename Bot!**\n\n"
-        "📁 Send me a file.\n"
-        "✏️ Then send the new filename.\n\n"
-        "⚡ I will rename it and send it back.\n\n"
-        "Use /help for commands."
+        "📁 Send me a file and I will rename it.\n\n"
+        "⚡ **How it works:**\n"
+        "1️⃣ Send your file\n"
+        "2️⃣ Send the new filename\n"
+        "3️⃣ Bot renames it\n"
+        "4️⃣ Bot sends it back\n\n"
+        "📚 /help\n"
+        "❌ /cancel"
     )
 
 
 # ============================================================
-# HELP COMMAND
+# /HELP
 # ============================================================
 
-@app.on_message(filters.private & filters.command("help"))
-async def help_command(client: Client, message: Message):
+@bot.on_message(
+    filters.private & filters.command("help")
+)
+async def help_handler(client, message):
 
     await message.reply_text(
-        "📚 **Commands**\n\n"
-        "/start - Start the bot\n"
-        "/help - Show help\n"
-        "/cancel - Cancel current file\n\n"
-        "📁 Send a file → send the new filename."
+        "📚 **AniToon Rename Bot**\n\n"
+        "📁 Send a file\n"
+        "✏️ Send the new filename\n"
+        "⚡ I'll rename it and send it back.\n\n"
+        "**Commands**\n"
+        "/start - Start bot\n"
+        "/help - Help\n"
+        "/cancel - Cancel current file"
     )
 
 
 # ============================================================
-# CANCEL COMMAND
+# /CANCEL
 # ============================================================
 
-@app.on_message(filters.private & filters.command("cancel"))
-async def cancel_command(client: Client, message: Message):
+@bot.on_message(
+    filters.private & filters.command("cancel")
+)
+async def cancel_handler(client, message):
 
     user_id = message.from_user.id
 
     data = user_files.pop(user_id, None)
 
-    if not data:
+    if data:
+
+        path = data["path"]
+
+        if path.exists():
+            path.unlink()
+
         await message.reply_text(
-            "ℹ️ You don't have an active file."
+            "❌ Current file cancelled."
         )
-        return
 
-    file_path = data["path"]
+    else:
 
-    if file_path.exists():
-        file_path.unlink()
-
-    await message.reply_text(
-        "❌ Current file cancelled."
-    )
+        await message.reply_text(
+            "ℹ️ There is no active file."
+        )
 
 
 # ============================================================
 # RECEIVE FILE
 # ============================================================
 
-@app.on_message(
+@bot.on_message(
     filters.private
     & (
         filters.document
@@ -141,84 +174,82 @@ async def cancel_command(client: Client, message: Message):
         | filters.audio
     )
 )
-async def receive_file(client: Client, message: Message):
+async def file_handler(client, message):
 
     user_id = message.from_user.id
 
-    # Remove previous pending file
-    old_data = user_files.pop(user_id, None)
+    # Remove previous file
+    old = user_files.pop(user_id, None)
 
-    if old_data:
+    if old:
 
-        old_path = old_data["path"]
+        old_path = old["path"]
 
         if old_path.exists():
             old_path.unlink()
 
-    # Determine filename
+    # Get original filename
     if message.document:
 
-        original_name = (
+        filename = (
             message.document.file_name
             or f"file_{message.id}"
         )
 
-        file_size = message.document.file_size or 0
+        size = message.document.file_size or 0
 
     elif message.video:
 
-        original_name = (
+        filename = (
             message.video.file_name
             or f"video_{message.id}.mp4"
         )
 
-        file_size = message.video.file_size or 0
+        size = message.video.file_size or 0
 
     else:
 
-        original_name = (
+        filename = (
             message.audio.file_name
             or f"audio_{message.id}.mp3"
         )
 
-        file_size = message.audio.file_size or 0
+        size = message.audio.file_size or 0
 
-    # Temporary local filename
     temp_path = DOWNLOAD_DIR / (
-        f"{user_id}_{message.id}_{original_name}"
+        f"{user_id}_{message.id}_{filename}"
     )
 
     user_files[user_id] = {
         "message": message,
         "path": temp_path,
-        "original_name": original_name,
-        "size": file_size,
+        "filename": filename,
     }
 
-    size_mb = file_size / (1024 * 1024)
+    size_mb = size / (1024 * 1024)
 
     await message.reply_text(
-        f"📁 **File received!**\n\n"
-        f"**Name:** `{original_name}`\n"
-        f"**Size:** `{size_mb:.2f} MB`\n\n"
-        "✏️ **Now send the new filename.**\n\n"
+        "📁 **File received!**\n\n"
+        f"📄 `{filename}`\n"
+        f"📦 `{size_mb:.2f} MB`\n\n"
+        "✏️ Now send the **new filename**.\n\n"
         "Example:\n"
         "`My Movie 2026`"
     )
 
 
 # ============================================================
-# RECEIVE NEW FILENAME
+# RECEIVE NEW NAME
 # ============================================================
 
-@app.on_message(
+@bot.on_message(
     filters.private
     & filters.text
     & ~filters.command(
         ["start", "help", "cancel"]
     )
 )
-async def rename_file(client: Client, message: Message):
+async def rename_handler(client, message):
 
     user_id = message.from_user.id
 
@@ -227,18 +258,14 @@ async def rename_file(client: Client, message: Message):
     if not data:
 
         await message.reply_text(
-            "📁 Please send a file first."
+            "📁 Send a file first."
         )
 
         return
 
-    original_path = data["path"]
-    original_name = data["original_name"]
-
-    new_name = message.text.strip()
-
-    # Prevent paths such as ../../something
-    new_name = os.path.basename(new_name)
+    new_name = os.path.basename(
+        message.text.strip()
+    )
 
     if not new_name:
 
@@ -248,62 +275,49 @@ async def rename_file(client: Client, message: Message):
 
         return
 
-    # Keep original extension if user didn't enter one
-    original_extension = Path(original_name).suffix
+    original_name = data["filename"]
 
-    if not Path(new_name).suffix and original_extension:
+    extension = Path(original_name).suffix
 
-        new_name += original_extension
+    if not Path(new_name).suffix and extension:
+
+        new_name += extension
+
+    old_path = data["path"]
 
     new_path = DOWNLOAD_DIR / (
         f"{user_id}_{new_name}"
     )
 
     status = await message.reply_text(
-        "⬇️ **Downloading file...**"
+        "⬇️ **Downloading...**"
     )
 
     try:
 
-        # ====================================================
-        # DOWNLOAD
-        # ====================================================
-
         await client.download_media(
             data["message"],
-            file_name=str(original_path),
+            file_name=str(old_path),
         )
 
-        # ====================================================
-        # RENAME
-        # ====================================================
-
         await status.edit_text(
-            "⚡ **Renaming file...**"
+            "⚡ **Renaming...**"
         )
 
-        original_path.rename(new_path)
-
-        # ====================================================
-        # UPLOAD
-        # ====================================================
+        old_path.rename(new_path)
 
         await status.edit_text(
-            "⬆️ **Uploading renamed file...**"
+            "⬆️ **Uploading...**"
         )
 
         await client.send_document(
-            chat_id=message.chat.id,
+            message.chat.id,
             document=str(new_path),
             caption=(
-                f"✅ **Renamed successfully!**\n\n"
-                f"📁 `{new_name}`"
+                "✅ **Renamed successfully!**\n\n"
+                f"📄 `{new_name}`"
             ),
         )
-
-        # ====================================================
-        # CLEANUP
-        # ====================================================
 
         if new_path.exists():
             new_path.unlink()
@@ -314,8 +328,12 @@ async def rename_file(client: Client, message: Message):
 
     except Exception as error:
 
-        # Cleanup temporary files
-        for path in [original_path, new_path]:
+        log.exception(
+            "Rename failed for user %s",
+            user_id,
+        )
+
+        for path in (old_path, new_path):
 
             try:
 
@@ -339,20 +357,38 @@ async def rename_file(client: Client, message: Message):
 
 async def main():
 
-    print("🚀 Starting AniToon Rename Bot...")
+    log.info("======================================")
+    log.info("🚀 Starting AniToon Rename Bot")
+    log.info("======================================")
 
     await start_web_server()
 
-    print("🤖 Connecting to Telegram...")
+    log.info("Connecting to Telegram...")
 
-    await app.start()
+    await bot.start()
 
-    print("✅ Telegram bot is running!")
-    print("⚡ Ready to rename files.")
+    me = await bot.get_me()
 
-    # Keep process alive
+    log.info(
+        "TELEGRAM: connected as @%s",
+        me.username,
+    )
+
+    log.info("✅ BOT IS RUNNING")
+    log.info("⚡ Ready to rename files")
+
     await asyncio.Event().wait()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+
+    try:
+        asyncio.run(main())
+
+    except Exception:
+
+        log.exception(
+            "FATAL ERROR: bot stopped"
+        )
+
+        raise
