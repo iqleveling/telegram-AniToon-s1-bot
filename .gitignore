@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+.env
+.venv/
+venv/
+
+downloads/*
+!downloads/.gitkeep
+
+*.session
+*.session-journal
+
+.DS_Store
