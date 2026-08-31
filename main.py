@@ -406,7 +406,7 @@ class BotApplication:
             if not await self.guard_message(message):
                 return
             await message.reply_text(
-                text_main(await self.is_owner(message.from_user.id)),
+                text_main(self.is_owner(message.from_user.id)),
                 reply_markup=main_menu(await self.is_admin(message.from_user.id)),
             )
 
@@ -599,7 +599,7 @@ class BotApplication:
             await query.message.edit_text(text, reply_markup=back("about"))
         elif data == "main":
             await query.message.edit_text(
-                text_main(await self.is_owner(user_id)),
+                text_main(self.is_owner(user_id)),
                 reply_markup=main_menu(await self.is_admin(user_id)),
             )
         elif data == "about":
