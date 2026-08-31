@@ -1,0 +1,1 @@
+- [GitHub publish fallback](github-publish.md) — use an attached GitHub connection’s Git data API when imported HTTPS remotes reject password pushes.
