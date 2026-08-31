@@ -27,6 +27,7 @@ class Repository:
         "channel_settings",
         "join_request_settings",
         "reaction_settings",
+        "permissions_settings",
         "admins",
         "force_subscribe",
     )
@@ -107,6 +108,9 @@ class Repository:
             [("owner_user_id", 1), ("chat_id", 1)], unique=True
         )
         await self.db["reaction_settings"].create_index(
+            [("owner_user_id", 1), ("chat_id", 1)], unique=True
+        )
+        await self.db["permissions_settings"].create_index(
             [("owner_user_id", 1), ("chat_id", 1)], unique=True
         )
 
@@ -208,6 +212,20 @@ class Repository:
                 "targets": ["all"],
             },
         )
+        await self._upsert(
+            "permissions_settings",
+            query,
+            {
+                "change_info": True,
+                "manage_messages": True,
+                "manage_stories": True,
+                "direct_messages": True,
+                "invite_users": True,
+                "live_streams": True,
+                "add_admins": True,
+                "ban_users": True,
+            },
+        )
         return stored
 
     async def get_channel(self, owner_user_id: int, chat_id: int) -> dict | None:
@@ -218,7 +236,8 @@ class Repository:
         settings = await self._find_one("channel_settings", query) or {}
         join = await self._find_one("join_request_settings", query) or {}
         reactions = await self._find_one("reaction_settings", query) or {}
-        return {**channel, **settings, **join, **reactions}
+        permissions = await self._find_one("permissions_settings", query) or {}
+        return {**channel, **settings, **join, **reactions, **permissions}
 
     async def get_channels(self, owner_user_id: int) -> list[dict]:
         channels = await self._find_many(
@@ -271,6 +290,18 @@ class Repository:
                     "reaction_enabled", "reactions", "reaction_delay", "targets"
                 )
             }
+        permission_keys = {
+            "change_info", "manage_messages", "manage_stories",
+            "direct_messages", "invite_users", "live_streams",
+            "add_admins", "ban_users"
+        }
+        if any(key in values for key in permission_keys):
+            await self._upsert("permissions_settings", query, values)
+            values = {
+                key: value
+                for key, value in values.items()
+                if key not in permission_keys
+            }
         if values:
             await self._upsert(collection, query, values)
         return await self.get_channel(owner_user_id, chat_id)
@@ -282,6 +313,7 @@ class Repository:
             "channel_settings",
             "join_request_settings",
             "reaction_settings",
+            "permissions_settings",
         ):
             await self._delete(collection, query)
 
