@@ -1,27 +1,59 @@
-# Telegram AniToon S1 Rename Bot
+# AniToon Auto Manager Bot
 
-Fast Telegram file renaming bot.
+Production-oriented Telegram bot for join-request automation and legitimate
+single-bot reactions on managed channels and groups.
 
-## Level 1
+## Features
 
-- Receive files
-- Ask for a new filename
-- Rename files
-- Send renamed files back
-- Render Free Web Service support
-- Progress display
-- `/start`
-- `/help`
-- `/cancel`
+- Per-user, per-channel configuration with ownership checks.
+- Public `@username`, private `-100…` chat IDs, and forwarded channel-post setup.
+- Auto accept, delayed accept, auto decline, and manual join-request modes.
+- Per-channel approval and reaction delays.
+- Weighted reaction selection with emoji percentages that must total 100%.
+- Message-type targeting for text, photos, videos, documents, and audio.
+- Optional welcome messages with safe placeholders.
+- Four owner-managed force-subscribe slots with real Telegram membership checks.
+- Owner/admin authorization by numeric Telegram IDs.
+- MongoDB persistence with a bounded temporary in-memory fallback on outages.
+- Async queues, concurrency limits, duplicate event protection, FloodWait handling,
+  retries, and graceful shutdown.
+- `GET /`, `GET /health`, and `GET /status` health endpoints.
 
-## Environment Variables
+The bot uses only Telegram-supported bot operations. It does not create fake
+accounts, simulate engagement, or bypass permissions.
 
-Configured in Render:
+## Configuration
 
-- API_ID
-- API_HASH
-- BOT_TOKEN
-- OWNER_ID
-- FORCE_SUB_CHANNEL
-- LOG_CHANNEL
-- MONGO_URI
+Put required values in Replit Secrets, not in GitHub:
+
+| Name | Required | Description |
+| --- | --- | --- |
+| `BOT_TOKEN` | yes | BotFather token |
+| `API_ID` | yes | Telegram application ID |
+| `API_HASH` | yes | Telegram application hash |
+| `OWNER_ID` | yes | Numeric owner Telegram user ID |
+| `MONGO_DB` | yes | MongoDB connection URI |
+| `PORT` | no | HTTP port, default `8000` |
+| `SUPPORT_USERNAME` | no | Support account without `@` |
+| `UPDATES_CHANNEL` | no | Optional updates channel/link |
+| `MONGO_DATABASE` | no | Database name, default `anitoon_auto_manager` |
+
+No credentials are logged, displayed by the UI, or included in `.env.example`.
+Force-subscribe channels are intentionally configured by the owner inside the
+bot and are never invented by the application.
+
+## Run
+
+```bash
+python main.py
+```
+
+Replit deployment uses the same command and respects `PORT`. The health check
+returns HTTP 200 JSON from `/health`.
+
+## Telegram permissions
+
+The bot must be an administrator in each managed channel/group. To process join
+requests, enable **Invite Users via Link**. Telegram may expose additional
+permissions for reactions or posting depending on the chat type; only the
+permissions available in Telegram are used.

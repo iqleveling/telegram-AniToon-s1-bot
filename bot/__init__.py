@@ -1,0 +1,1 @@
+"""Auto Join Request and Auto Reaction bot package."""
