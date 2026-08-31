@@ -21,7 +21,7 @@ from pyrogram.types import (
 from bot.database import Repository
 from bot.keyboards import (
     add_channel, back, channel_settings, join_menu, kb, main_menu,
-    owner_menu, reaction_menu, target_menu, timing_menu, welcome_menu,
+    owner_menu, reaction_menu, target_menu, timing_menu, welcome_menu, permissions_menu,
 )
 from bot.services import (
     DEFAULT_TARGETS, JOIN_MODES, SUPPORTED_TARGETS, choose_weighted_reaction,
@@ -461,7 +461,7 @@ class BotApplication:
         state = self.states.get(user_id)
         if not state:
             if await self.guard_message(message):
-                        await message.reply_text(
+                await message.reply_text(
                     "Use the menu below.", reply_markup=main_menu(
                         await self.is_admin(user_id)
                     )
@@ -649,13 +649,16 @@ class BotApplication:
                     "Select a channel:" if channels else "No channels connected yet."
                 ), reply_markup=kb(rows))
         elif data == "reaction_channels":
+            channels = await self.repository.get_channels(user_id)
+            rows = [
+                [(f"📢 {c.get('username') or c.get('title')}",
+                  f"reaction:{c['chat_id']}")]
+                for c in channels
+            ]
+            rows.append([("⬅️ Back", "main")])
             await query.message.edit_text(
-                "❤️ **AUTO REACTIONS**\n\nSelect a channel to configure:",
-                reply_markup=kb([
-                    [(f"📢 {c.get('username') or c.get('title')}",
-                      f"reaction:{c['chat_id']}")]
-                    for c in await self.repository.get_channels(user_id)
-                ] + [[("⬅️ Back", "main")]]),
+                "❤️ **AUTO REACTIONS**\n\nSelect a channel to configure:" if channels else "❤️ **AUTO REACTIONS**\n\nNo channels connected yet.",
+                reply_markup=kb(rows),
             )
         elif data.startswith("channel:"):
             chat_id = int(data.split(":")[1])
@@ -697,9 +700,10 @@ class BotApplication:
                                           reply_markup=back(f"timing:{data.split(':')[1]}"))
         elif data.startswith("reaction:"):
             chat_id = int(data.split(":")[1])
+            config = await self.repository.get_channel(user_id, chat_id) or {}
             await query.message.edit_text(await self.reaction_text(user_id, chat_id),
                                           reply_markup=reaction_menu(
-                                              chat_id, (await self.repository.get_channel(user_id, chat_id) or {}).get("reaction_enabled", False)))
+                                              chat_id, config.get("reaction_enabled", False)))
         elif data.startswith("radd:"):
             chat_id = int(data.split(":")[1])
             self.states[user_id] = {"action": "reaction_add", "chat_id": chat_id}
