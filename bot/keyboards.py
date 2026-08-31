@@ -45,7 +45,8 @@ def channel_settings(chat_id: int, enabled: bool):
          ("⏱️ Approval Timing", f"timing:{prefix}")],
         [("❤️ Auto Reactions", f"reaction:{prefix}"),
          ("⏱️ Reaction Delay", f"rdelay:{prefix}")],
-        [("💬 Welcome Message", f"welcome:{prefix}")],
+        [("💬 Welcome Message", f"welcome:{prefix}"),
+         ("🎯 Target Types", f"targets:{prefix}")],
         [("🔴 Disable" if enabled else "🟢 Enable", f"toggle:{prefix}")],
         [("🗑️ Remove Channel", f"remove:{prefix}")],
         [("⬅️ Back", "channels")],
@@ -66,9 +67,12 @@ def join_menu(chat_id: int, mode: str):
 
 def timing_menu(chat_id: int, reaction: bool = False):
     prefix = "rsetdelay" if reaction else "setdelay"
-    values = [0, 2, 5, 10, 30] if reaction else [0, 5, 10, 30, 60, 300]
-    labels = ["⚡ Immediately"] + [f"⏱️ {v} Seconds" for v in values[1:]]
-    if not reaction:
+    if reaction:
+        values = [0, 2, 5, 10, 30]
+        labels = ["⚡ Immediately", "⏱️ 2 Seconds", "⏱️ 5 Seconds",
+                  "⏱️ 10 Seconds", "⏱️ 30 Seconds"]
+    else:
+        values = [0, 5, 10, 30, 60, 300]
         labels = ["⚡ Immediately", "⏱️ 5 Seconds", "⏱️ 10 Seconds",
                   "⏱️ 30 Seconds", "⏱️ 1 Minute", "⏱️ 5 Minutes"]
     rows = [[(label, f"{prefix}:{chat_id}:{value}")]
@@ -105,9 +109,9 @@ def welcome_menu(chat_id: int, enabled: bool):
 
 def target_menu(chat_id: int, targets: list[str]):
     rows = []
-    for key, label in (("text", "Text Messages"), ("photo", "Photo Messages"),
-                       ("video", "Video Messages"), ("document", "Document Messages"),
-                       ("audio", "Audio Messages"), ("all", "All Supported Types")):
+    for key, label in (("text", "📝 Text Messages"), ("photo", "🖼️ Photo Messages"),
+                       ("video", "🎥 Video Messages"), ("document", "📄 Document Messages"),
+                       ("audio", "🎵 Audio Messages"), ("all", "✅ All Supported Types")):
         mark = "✅" if key in targets else "▫️"
         rows.append([(f"{mark} {label}", f"target:{chat_id}:{key}")])
     rows.append([("⬅️ Back", f"reaction:{chat_id}")])
@@ -121,4 +125,19 @@ def owner_menu():
         [("🛠️ Maintenance", "maintenance"), ("🔐 Security", "security")],
         [("📊 Bot Status", "botstatus"), ("🗄️ Database Status", "dbstatus")],
         [("🔑 Secrets Status", "secrets"), ("⬅️ Back", "main")],
+    ])
+
+
+def permissions_menu(chat_id: int, enabled: bool):
+    """Menu for bot permissions/capabilities."""
+    return kb([
+        [("✅ Change Channel Info", f"perm:{chat_id}:change_info"),
+         ("✅ Manage Messages", f"perm:{chat_id}:manage_messages")],
+        [("✅ Manage Stories", f"perm:{chat_id}:manage_stories"),
+         ("✅ Direct Messages", f"perm:{chat_id}:direct_messages")],
+        [("✅ Invite Users via Link", f"perm:{chat_id}:invite_users"),
+         ("✅ Manage Live Streams", f"perm:{chat_id}:live_streams")],
+        [("✅ Add New Admins", f"perm:{chat_id}:add_admins"),
+         ("✅ Ban Users", f"perm:{chat_id}:ban_users")],
+        [("⬅️ Back", f"channel:{chat_id}")],
     ])
