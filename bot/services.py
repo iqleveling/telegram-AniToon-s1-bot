@@ -9,16 +9,27 @@ from typing import Iterable
 
 
 SUPPORTED_TARGETS = {
-    "text": "Text Messages",
-    "photo": "Photo Messages",
-    "video": "Video Messages",
-    "document": "Document Messages",
-    "audio": "Audio Messages",
+    "text": "📝 Text Messages",
+    "photo": "🖼️ Photo Messages",
+    "video": "🎥 Video Messages",
+    "document": "📄 Document Messages",
+    "audio": "🎵 Audio Messages",
 }
 DEFAULT_TARGETS = tuple(SUPPORTED_TARGETS)
 ALLOWED_DELAYS = {0, 5, 10, 30, 60, 300}
 ALLOWED_REACTION_DELAYS = {0, 2, 5, 10, 30}
 JOIN_MODES = {"auto", "delayed", "decline", "manual"}
+
+SUPPORTED_PERMISSIONS = {
+    "change_info": "Change Channel Info",
+    "manage_messages": "Manage Messages",
+    "manage_stories": "Manage Stories",
+    "direct_messages": "Direct Messages",
+    "invite_users": "Invite Users via Link",
+    "live_streams": "Manage Live Streams",
+    "add_admins": "Add New Admins",
+    "ban_users": "Ban Users",
+}
 
 
 def is_valid_emoji(value: str) -> bool:
