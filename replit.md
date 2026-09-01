@@ -8,8 +8,9 @@ The production entry point is `main.py` and the configured workflow runs:
 python main.py
 ```
 
-The HTTP server listens on `PORT` (default `8000`) and exposes `/`, `/health`,
-and `/status`. Required values belong in Replit Secrets: `BOT_TOKEN`, `API_ID`,
+The HTTP server listens on `PORT` (default `8080`) and exposes `/`, `/health`,
+`/ping`, and `/status`. `/` returns `Replit Telegram bot is running`, `/health`
+returns `OK`, and `/ping` returns `pong`. Required values belong in Replit Secrets: `BOT_TOKEN`, `API_ID`,
 `API_HASH`, `OWNER_ID`, and `MONGO_DB`.
 
 ## Deployment
