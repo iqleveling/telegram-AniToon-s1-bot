@@ -40,7 +40,7 @@ def load_settings(strict: bool = True) -> Settings:
         "api_id": os.getenv("API_ID", "0"),
         "api_hash": os.getenv("API_HASH", ""),
         "owner_id": os.getenv("OWNER_ID", "0"),
-        "mongo_db": os.getenv("MONGO_DB", ""),
+        "mongo_db": os.getenv("MONGO_URI") or os.getenv("MONGO_DB", ""),
     }
     if strict:
         missing = [
@@ -61,7 +61,7 @@ def load_settings(strict: bool = True) -> Settings:
     try:
         api_id = int(raw["api_id"] or 0)
         owner_id = int(raw["owner_id"] or 0)
-        port = int(os.getenv("PORT", "8000"))
+        port = int(os.getenv("PORT", "8080"))
     except ValueError as exc:
         raise RuntimeError("API_ID, OWNER_ID, and PORT must be integers") from exc
     return Settings(
