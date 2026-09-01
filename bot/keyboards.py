@@ -29,11 +29,11 @@ def back(data="main"):
 
 
 def add_channel():
+    # Removed "Find / Select Channel" entry and updated labels to match admin flow
     return kb([
-        [("🔍 Find / Select Channel", "add_find")],
-        [("➕ Add Using Username", "add_username")],
+        [("➕ Add Channel or Chat", "add_username")],
         [("🔢 Add Using Chat ID", "add_id")],
-        [("❓ How To Add Bot", "add_how")],
+        [("❓ How To Add Bot (Admin)", "add_how")],
         [("⬅️ Back", "main")],
     ])
 
