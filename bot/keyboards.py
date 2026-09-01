@@ -29,12 +29,21 @@ def back(data="main"):
 
 
 def add_channel():
-    # Removed "Find / Select Channel" entry and updated labels to match admin flow
+    # Top-level "Add" screen. The user then picks "Add Channel or Chat" which opens a choice screen.
     return kb([
         [("➕ Add Channel or Chat", "add_channel")],
         [("🔢 Add Using Chat ID", "add_id")],
         [("❓ How To Add Bot (Admin)", "add_how")],
         [("⬅️ Back", "main")],
+    ])
+
+
+def add_channel_choice():
+    """Shown after the user taps Add Channel or Chat — choose channel vs group."""
+    return kb([
+        [("Add me to a channel!", "add_to_channel")],
+        [("Add me to a group!", "add_to_group")],
+        [("⬅️ Back", "add")],
     ])
 
 
