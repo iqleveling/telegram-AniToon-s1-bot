@@ -205,7 +205,9 @@ class BotApplication:
         self.http_runner: web.AppRunner | None = None
         self.me = None
         self.stopping = False
+        self.bot_status = "starting"
         self.db_task: asyncio.Task | None = None
+        self.http_site: web.TCPSite | None = None
 
     def is_owner(self, user_id: int) -> bool:
         return int(user_id) == self.settings.owner_id
@@ -643,21 +645,36 @@ class BotApplication:
             return
 
     async def health(self, _):
-        return web.json_response({"ok": True, "service": "telegram-manager", "telegram": bool(self.me), "database": self.repository.connected})
+        return web.Response(text="OK", content_type="text/plain")
+
+    async def ping(self, _):
+        return web.Response(text="pong", content_type="text/plain")
 
     async def status(self, _):
-        return web.json_response({"ok": True, "uptime_seconds": int(time.monotonic() - STARTED_AT), "database": self.repository.connected, "channels": await self.repository.count_channels()})
+        return web.json_response({
+            "status": "ok" if self.bot_status == "running" else "starting",
+            "uptime_seconds": int(time.monotonic() - STARTED_AT),
+            "bot_status": self.bot_status,
+            "database_status": "connected" if self.repository.connected else "fallback",
+        })
 
     async def root(self, _):
-        return web.json_response({"service": "AniToon Auto Manager Bot", "health": "/health", "status": "/status"})
+        return web.Response(text="Replit Telegram bot is running", content_type="text/plain")
 
     async def start_http(self):
+        log.info("Web server starting...")
         app = web.Application()
-        app.add_routes([web.get("/", self.root), web.get("/health", self.health), web.get("/status", self.status)])
+        app.add_routes([
+            web.get("/", self.root),
+            web.get("/health", self.health),
+            web.get("/ping", self.ping),
+            web.get("/status", self.status),
+        ])
         self.http_runner = web.AppRunner(app)
         await self.http_runner.setup()
-        await web.TCPSite(self.http_runner, "0.0.0.0", self.settings.port).start()
-        log.info("Health server listening on port %s", self.settings.port)
+        self.http_site = web.TCPSite(self.http_runner, "0.0.0.0", self.settings.port)
+        await self.http_site.start()
+        log.info("Web server listening on 0.0.0.0:%s", self.settings.port)
 
     async def reconnect_database(self):
         while not self.stopping:
@@ -671,15 +688,26 @@ class BotApplication:
         for sig in (signal.SIGINT, signal.SIGTERM):
             with suppress(NotImplementedError):
                 loop.add_signal_handler(sig, stop_event.set)
-        await self.repository.connect()
-        await self.client.start()
-        self.me = await self.client.get_me()
-        await self.register_handlers()
-        await self.processor.start()
+
+        # Bind the liveness server first. It must remain available while the
+        # database and Telegram client connect or recover.
         await self.start_http()
+        log.info("Telegram bot starting...")
+        database_connected = await self.repository.connect()
+        log.info("Database connection status: %s", "connected" if database_connected else "temporary in-memory fallback")
         self.db_task = asyncio.create_task(self.reconnect_database(), name="database-reconnect")
-        log.info("Bot started as @%s", self.me.username or self.me.id)
+
         try:
+            await self.client.start()
+            self.me = await self.client.get_me()
+            await self.register_handlers()
+            await self.processor.start()
+            self.bot_status = "running"
+            log.info("Telegram bot started as @%s", self.me.username or self.me.id)
+            await stop_event.wait()
+        except Exception:
+            self.bot_status = "error"
+            log.exception("Telegram bot startup/runtime failed")
             await stop_event.wait()
         finally:
             self.stopping = True
@@ -690,7 +718,8 @@ class BotApplication:
             await self.processor.stop()
             if self.http_runner:
                 await self.http_runner.cleanup()
-            await self.client.stop()
+            if getattr(self.client, "is_connected", False):
+                await self.client.stop()
             await self.repository.close()
 
 
