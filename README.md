@@ -17,7 +17,7 @@ single-bot reactions on managed channels and groups.
 - MongoDB persistence with a bounded temporary in-memory fallback on outages.
 - Async queues, concurrency limits, duplicate event protection, FloodWait handling,
   retries, and graceful shutdown.
-- `GET /`, `GET /health`, and `GET /status` health endpoints.
+- `GET /`, `GET /health`, `GET /ping`, and `GET /status` health endpoints.
 
 The bot uses only Telegram-supported bot operations. It does not create fake
 accounts, simulate engagement, or bypass permissions.
@@ -32,7 +32,7 @@ Put required values in Replit Secrets, not in GitHub:
 | `API_ID` | yes | Telegram application ID |
 | `API_HASH` | yes | Telegram application hash |
 | `OWNER_ID` | yes | Numeric owner Telegram user ID |
-| `MONGO_DB` | yes | MongoDB connection URI |
+| `MONGO_URI` or `MONGO_DB` | yes | MongoDB connection URI; `MONGO_URI` takes precedence |
 | `PORT` | no | HTTP port, default `8000` |
 | `SUPPORT_USERNAME` | no | Support account without `@` |
 | `UPDATES_CHANNEL` | no | Optional updates channel/link |
@@ -48,8 +48,7 @@ bot and are never invented by the application.
 python main.py
 ```
 
-Replit deployment uses the same command and respects `PORT`. The health check
-returns HTTP 200 JSON from `/health`.
+Replit deployment uses the same command and respects `PORT` (default `8080`). The `/` endpoint returns `Replit Telegram bot is running`, `/health` returns `OK`, `/ping` returns `pong`, and `/status` returns JSON.
 
 ## Telegram permissions
 
