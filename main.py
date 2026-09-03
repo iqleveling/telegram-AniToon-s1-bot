@@ -241,9 +241,6 @@ class BotApplication:
         return InlineKeyboardMarkup(rows)
 
     async def guard_message(self, message: Message) -> bool:
-        # Allow owners and admins to bypass the guard
-        if await self.is_admin(message.from_user.id):
-            return True
         if await self.allowed(message.from_user.id):
             return True
         await message.reply_text(
@@ -255,9 +252,6 @@ class BotApplication:
     async def guard_callback(self, query: CallbackQuery) -> bool:
         data = query.data or ""
         if data.startswith(("force", "about", "help", "main", "support")):
-            return True
-        # Allow owners and admins to bypass the guard
-        if await self.is_admin(query.from_user.id):
             return True
         if await self.allowed(query.from_user.id):
             return True
