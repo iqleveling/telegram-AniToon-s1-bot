@@ -241,10 +241,13 @@ class BotApplication:
         return InlineKeyboardMarkup(rows)
 
     async def guard_message(self, message: Message) -> bool:
+        # Allow owners and admins to bypass the guard
+        if await self.is_admin(message.from_user.id):
+            return True
         if await self.allowed(message.from_user.id):
             return True
         await message.reply_text(
-            "╔══════════════════════════╗\n      🔒 JOIN REQUIRED\n╚══════════════════════════╝\n\nPlease join our required channels first.",
+            "╔══════════════════════════╗\n      🔒 JOIN REQUIRED\n╚══════════════════════════╝\n\nYou need to join the required channels to use this bot.",
             reply_markup=await self.force_markup(),
         )
         return False
@@ -252,6 +255,9 @@ class BotApplication:
     async def guard_callback(self, query: CallbackQuery) -> bool:
         data = query.data or ""
         if data.startswith(("force", "about", "help", "main", "support")):
+            return True
+        # Allow owners and admins to bypass the guard
+        if await self.is_admin(query.from_user.id):
             return True
         if await self.allowed(query.from_user.id):
             return True
@@ -503,13 +509,12 @@ class BotApplication:
                 if getattr(member, "status", "") != "owner" and not getattr(privileges, "can_invite_users", False):
                     raise ValueError("invite permission missing")
                 username = getattr(chat, "username", "") or ""
-                await self.repository.save_force_channel(state["slot"], {"channel_id": int(chat.id), "title": getattr(chat, "title", "Channel"), "username": f"@{username}" if username else "", "link": f"https://t.me/{username}" if username else "", "enabled": True})
+                await self.repository.save_force_channel(state["slot"], {"channel_id": int(chat.id), "title": getattr(chat, "title", "Channel"), "username": f"@{username}" if username else "", "link": f"https://t.me/{username}" if username else ""})
+                self.states.pop(user_id, None)
+                await message.reply_text("✅ Force-subscribe channel saved.", reply_markup=owner_menu())
             except Exception:
                 await message.reply_text("❌ I could not verify that channel. Make sure the bot is an administrator with invite permission.")
                 return
-            self.states.pop(user_id, None)
-            await message.reply_text("✅ Force-subscribe channel saved.", reply_markup=owner_menu())
-            return
         if action == "broadcast":
             await message.reply_text("Broadcast is intentionally disabled until a recipient policy is configured safely.", reply_markup=owner_menu())
             self.states.pop(user_id, None)
@@ -571,7 +576,7 @@ class BotApplication:
         if data.startswith("reaction:"):
             await self.show_reaction(query, user_id, int(data.split(":", 1)[1])); return
         if data.startswith("radd:"):
-            self.states[user_id] = {"action": "reaction_add", "chat_id": int(data.split(":", 1)[1])}; await self.edit(query, "Send an emoji and percentage, for example ❤️ 50. Total weights must not exceed 100%.", back()); return
+            self.states[user_id] = {"action": "reaction_add", "chat_id": int(data.split(":", 1)[1])}; await self.edit(query, "Send an emoji and percentage, for example ❤️ 50. Total weights must sum to 100%.", back()); return
         if data.startswith("redit:"):
             self.states[user_id] = {"action": "reaction_edit", "chat_id": int(data.split(":", 1)[1])}; await self.edit(query, "Send the emoji and its new percentage, for example 🔥 30.", back()); return
         if data.startswith("rremove:"):
@@ -593,15 +598,15 @@ class BotApplication:
                 if not valid: await self.edit(query, f"❌ {status}", reaction_menu(chat_id, False)); return
             await self.repository.update_channel(user_id, chat_id, {"reaction_enabled": not item.get("reaction_enabled", False)}); await self.show_reaction(query, user_id, chat_id); return
         if data.startswith("preview:"):
-            item = await self.channel_for(user_id, int(data.split(":", 1)[1])); reactions = (item or {}).get("reactions", []); await query.answer(choose_weighted_reaction(reactions) or "Configure a valid 100% reaction set first.", show_alert=True); return
+            item = await self.channel_for(user_id, int(data.split(":", 1)[1])); reactions = (item or {}).get("reactions", []); await query.answer(choose_weighted_reaction(reactions) or "Configure reactions first."); return
         if data.startswith("welcome:"):
             await self.show_welcome(query, user_id, int(data.split(":", 1)[1])); return
         if data.startswith("welcomestate:"):
             _, raw_id, raw_state = data.split(":", 2); await self.repository.update_channel(user_id, int(raw_id), {"welcome_enabled": raw_state == "1"}); await self.show_welcome(query, user_id, int(raw_id)); return
         if data.startswith("welcomeedit:"):
-            self.states[user_id] = {"action": "welcome_edit", "chat_id": int(data.split(":", 1)[1])}; await self.edit(query, "Send the new welcome message. You can use {first_name}, {last_name}, {username}, {user_id}, and {chat_title}.", back()); return
+            self.states[user_id] = {"action": "welcome_edit", "chat_id": int(data.split(":", 1)[1])}; await self.edit(query, "Send the new welcome message. You can use {first_name}, {last_name}, {username}, {user_id}, {chat_title}.", back()); return
         if data.startswith("welcomepreview:"):
-            item = await self.channel_for(user_id, int(data.split(":", 1)[1])); template = (item or {}).get("welcome_message", "Welcome {first_name}!"); await query.answer(render_welcome(template, query.from_user, (item or {}).get("title", "Chat"))[:190], show_alert=True); return
+            item = await self.channel_for(user_id, int(data.split(":", 1)[1])); template = (item or {}).get("welcome_message", "Welcome {first_name}!"); await query.answer(render_welcome(template, query.from_user, "chat")); return
         if data.startswith("targets:"):
             await self.show_targets(query, user_id, int(data.split(":", 1)[1])); return
         if data.startswith("target:"):
@@ -626,7 +631,7 @@ class BotApplication:
         if data == "secrets":
             flags = self.settings.secret_status; body = "\n".join(f"{key}: {'configured' if value else 'missing'}" for key, value in flags.items()); await self.owner_page(query, "SECRETS STATUS", body); return
         if data in {"config", "maintenance", "security"}:
-            await self.owner_page(query, data.upper(), "No additional settings are required here. Runtime configuration comes from Replit Secrets and Telegram permissions."); return
+            await self.owner_page(query, data.upper(), "No additional settings are required here. Runtime configuration comes from Render Secrets and Telegram permissions."); return
         if data == "admins":
             admins = await self.repository.list_admins(); body = "\n".join(str(x.get("user_id")) for x in admins) or "No delegated admins."; await self.owner_page(query, "BOT ADMINS", body, [[("➕ Add Admin", "adminadd"), ("➖ Remove Admin", "adminremove")]]); return
         if data in {"adminadd", "adminremove"}:
@@ -634,9 +639,9 @@ class BotApplication:
         if data == "broadcast":
             await self.owner_page(query, "BROADCAST", "Broadcast is disabled by default. This prevents accidental messaging of users without an explicit recipient policy."); return
         if data == "force":
-            items = await self.repository.list_force_subscribe(); lines = "\n".join(f"Slot {x.get('slot')}: {x.get('title', 'configured')} ({'on' if x.get('enabled', True) else 'off'})" for x in items) or "No force-subscribe channels configured."; rows = [[("➕ Add slot 1", "forceadd:1"), ("➕ Add slot 2", "forceadd:2")], [("➕ Add slot 3", "forceadd:3"), ("➕ Add slot 4", "forceadd:4")]]; await self.owner_page(query, "FORCE SUBSCRIBE", lines, rows); return
+            items = await self.repository.list_force_subscribe(); lines = "\n".join(f"Slot {x.get('slot')}: {x.get('title', 'configured')} ({'on' if x.get('enabled', True) else 'off'})" for x in items) or "No force-subscribe channels configured."; rows = [[("🔗 Add Slot 1", "forceadd:1"), ("🔗 Add Slot 2", "forceadd:2")], [("🔗 Add Slot 3", "forceadd:3"), ("🔗 Add Slot 4", "forceadd:4")]]; await self.owner_page(query, "FORCE SUBSCRIBE", lines, rows); return
         if data.startswith("forceadd:"):
-            slot = int(data.split(":", 1)[1]); self.states[user_id] = {"action": "force_add", "slot": slot}; await self.edit(query, "Send @username or a -100… chat ID for this force-subscribe slot.", back("force")); return
+            slot = int(data.split(":", 1)[1]); self.states[user_id] = {"action": "force_add", "slot": slot}; await self.edit(query, "Send @username or a -100… chat ID for this force-subscribe slot, or /cancel.", back("force")); return
         if data == "forcecheck":
             if await self.allowed(user_id): await self.edit(query, "✅ Membership verified.", main_menu(self.is_owner(user_id)))
             else: await self.edit(query, "❌ You still need to join the required channels.", await self.force_markup())
